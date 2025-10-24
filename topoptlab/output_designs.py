@@ -26,23 +26,28 @@ def threshold(xPhys,
     """
     indices = np.flip(np.argsort(xPhys))
     vt = np.floor(volfrac*xPhys.shape[0]).astype(int)
-    xThresh = np.zeros(xPhys.shape,order="F")
+    xThresh = np.zeros(xPhys.shape)
     xThresh[indices[:vt]] = 1.
     xThresh[indices[vt:]] = 0.
-    
     print("Thresholded Vol.: {0:.3f}".format(vt/xThresh.shape[0]))
     return xThresh
 
 def export_vtk(filename, 
                nelx,nely, 
                xPhys,
+               phiPhys=None,
+               vectors=None,
                nelz=None,
                x=None,
                u=None, f=None,
                u_bw=None,
                f_bw=None,
                xTilde=None,
-               volfrac=None):
+               volfrac=None,
+               layer_ids=None,
+               E_GL_6=None,
+               S_cauchy_6=None,
+               S_mises=None):
     """
     Export design to a vtk file for visualisation e. g. with Paraview.
 
@@ -56,6 +61,11 @@ def export_vtk(filename,
         number of elements in y direction.
     xPhys : np.ndarray
         densities used to scale the material properties.
+    phiPhys : np.ndarray
+        orientations (theta,phi) used to rotate the material stiffness.
+    vectors : np.ndarray
+        vectors [cos(theta)cos(phi); sin(theta)cos(phi); -sin(phi)] used to show the 
+        orientation arrow field in Paraview.
     nelz : int
         number of elements in y direction.
     x : np.ndarray, optional
@@ -76,6 +86,15 @@ def export_vtk(filename,
     volfrac : float, optional
         volume fraction. If not None, then also a thresholded designed is 
         stored. The default is None.
+    layer_ids : int, optional
+        layers partitioned in the structures.
+    E_GL_6 : np.ndarray, optional
+        Green–Lagrange strain in Voigt order.
+    S_cauchy_6 : np.ndarray, optional
+        Cauchy stress in Voigt order.
+    S_mises : np.ndarray, optional
+        Von-Mises stress.
+        
 
     Returns
     -------
@@ -141,13 +160,29 @@ def export_vtk(filename,
     # insert data for elements
     el_data = {}
     el_data.update({"xPhys": [xPhys]})
-    if x is not None:
+    # el_data.update({"layer": [layer_ids]})  
+    if not x is None:
         el_data.update({"x": [x]})
-    if xTilde is not None:
+    if not xTilde is None:
         el_data.update({"xTilde": [xTilde]})
-    if volfrac is not None:
+    if not volfrac is None:
         el_data.update({"xThresh": [threshold(xPhys,volfrac)]})
-    #
+    if layer_ids is not None:
+        el_data["layer"] = [np.asarray(layer_ids, dtype=np.int64).ravel()] 
+    if E_GL_6 is not None:
+        el_data["E_GL_6"] = [np.asarray(E_GL_6, dtype=float)]
+    if S_cauchy_6 is not None:
+        el_data["S_cauchy_6"] = [np.asarray(S_cauchy_6, dtype=float)]
+    if S_mises is not None:
+        S_mises = np.asarray(S_mises, dtype=float)
+        if S_mises.ndim == 1:
+            S_mises = S_mises[:, None]
+        el_data["S_mises"] = [S_mises]
+    if phiPhys is not None:
+        el_data["phiPhys"] = [np.asarray(phiPhys, dtype=float)]
+    if vectors is not None:
+        el_data["vectors"] = [np.asarray(vectors, dtype=float)]
+    
     if nelz is None:
         Mesh(points,
              [("quad", idMat)],
